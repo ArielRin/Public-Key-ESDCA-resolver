@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <title>On-Chain PubKey Recovery</title>
+  <title>On-Chain PubKey Recovery (Sonic Blaze)</title>
   <style>
     body { font-family: sans-serif; padding: 2rem; }
     button { margin: .5rem 1rem .5rem 0; }
@@ -11,7 +11,7 @@
 </head>
 <body>
   <h1>On-Chain ECDSA PubKey Recovery</h1>
-  <button id="connect">Connect Wallet</button>
+  <button id="connect">Connect & Switch to Sonic Blaze</button>
   <button id="recover" disabled>Recover PubKey On-Chain</button>
   <pre id="output">🔒 Not connected</pre>
 
@@ -23,62 +23,113 @@
     const recoverBtn = document.getElementById('recover');
     const out = document.getElementById('output');
 
-    // 1) Update this with your deployed contract address
-    const CONTRACT_ADDRESS = '0x60de4cf9d53dD251375D10a5D48cB985Ec980463';
+    // ← Your new contract address
+    const CONTRACT_ADDRESS = '0xfa09dfbA4B87FeD1b27dCF72eefff57f89FfCbA6';
 
-    // 2) Minimal ABI for the recoverPubKey method
+    // ← Exact ABI you supplied
     const ABI = [
-      "function recoverPubKey(bytes32 message, uint8 v, bytes32 r, bytes32 s) external view returns (bytes)"
+      {
+        "inputs": [
+          { "internalType": "bytes32", "name": "digest", "type": "bytes32" },
+          { "internalType": "uint8",   "name": "v",      "type": "uint8"   },
+          { "internalType": "bytes32", "name": "r",      "type": "bytes32" },
+          { "internalType": "bytes32", "name": "s",      "type": "bytes32" }
+        ],
+        "name": "recoverPubKey",
+        "outputs": [
+          { "internalType": "bytes", "name": "", "type": "bytes" }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+      }
     ];
 
-    let provider, signer, account, contract;
+    // Sonic Blaze Testnet chain ID (57054) in hex
+    const TARGET_CHAIN_ID = '0x' + (57054).toString(16); // '0xdede'
+
+    let provider, signer, contract;
 
     function log(txt) {
       out.textContent = txt;
+      console.log(txt);
     }
 
     connectBtn.onclick = async () => {
       if (!window.ethereum) {
         return log('❌ No EVM wallet found');
       }
+
+      // 1) Connect wallet
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
       provider = new ethers.BrowserProvider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      signer = await provider.getSigner();
-      account = await signer.getAddress();
+      signer   = await provider.getSigner();
+      const account = await signer.getAddress();
       log(`✅ Connected: ${account}`);
-      // instantiate contract with signer
+
+      // 2) Switch/Add Sonic Blaze
+      let chainId = (await window.ethereum.request({ method: 'eth_chainId' })).toLowerCase();
+      log(`🔗 Current chain: ${chainId}`);
+      if (chainId !== TARGET_CHAIN_ID) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: TARGET_CHAIN_ID }]
+          });
+        } catch (err) {
+          if (err.code === 4902) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: TARGET_CHAIN_ID,
+                chainName: 'Sonic Blaze Testnet',
+                rpcUrls: ['https://sonic-blaze-rpc.publicnode.com'],
+                nativeCurrency: { name: 'Sonic', symbol: 'S', decimals: 18 },
+                blockExplorerUrls: ['https://blaze.soniclabs.com']
+              }]
+            });
+          } else {
+            return log(`❌ Could not switch network: ${err.message}`);
+          }
+        }
+        chainId = (await window.ethereum.request({ method: 'eth_chainId' })).toLowerCase();
+        log(`🔗 Switched chain: ${chainId}`);
+      }
+      if (chainId !== TARGET_CHAIN_ID) {
+        return log(`❌ Still not on Sonic Blaze (${TARGET_CHAIN_ID})`);
+      }
+
+      // 3) Verify contract exists
+      const code = await provider.getCode(CONTRACT_ADDRESS);
+      if (code === '0x') {
+        return log(`❌ No contract at ${CONTRACT_ADDRESS} on this network`);
+      }
+
+      // 4) Ready to call
       contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
       recoverBtn.disabled = false;
+      log('✅ Ready to recover pubkey on-chain');
     };
 
     recoverBtn.onclick = async () => {
       try {
         log('⏳ Signing message…');
-        // you can change this to any string
-        const messageString = 'Sign this message to register your encryption key';
+        const message = 'Sign this message to register your encryption key';
+        // ethers.hashMessage applies the EIP-191 prefix under the hood
+        const digest = ethers.hashMessage(message);
 
-        // 1) compute the raw 32-byte hash of the message (no prefix)
-        const messageHash = ethers.keccak256(ethers.toUtf8Bytes(messageString));
-
-        // 2) Sign with personal_sign (ethers adds the prefix internally)
-        const signature = await signer.signMessage(messageString);
-
-        // 3) Split into r, s, v
+        const signature = await signer.signMessage(message);
         const sig = ethers.Signature.from(signature);
-        const { r, s, v } = sig;
 
         log('⏳ Calling on-chain recovery…');
-        // 4) Call our contract’s recoverPubKey
         const pubkeyBytes = await contract.recoverPubKey(
-          messageHash,
-          v,
-          r,
-          s
+          digest,
+          sig.v,
+          sig.r,
+          sig.s
         );
-        // pubkeyBytes is a hex string "0x{64 bytes}", slice off "0x"
-        const hexKey = pubkeyBytes.slice(2);
-        // display as hex
-        log(`🔑 Uncompressed pubkey (hex X||Y):\n${hexKey}`);
+
+        // strip '0x' and display hex X||Y
+        log('🔑 Pubkey X||Y (hex):\n' + pubkeyBytes.slice(2));
       } catch (err) {
         console.error(err);
         log(`❌ Error: ${err.message || err}`);
