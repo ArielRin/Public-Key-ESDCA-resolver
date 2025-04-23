@@ -1,6 +1,6 @@
 # On‑Chain ECDSA Public Key Recovery
 
-This project enables any EVM-compatible dApp to designate an on-chain address whose ECDSA public key is used for encrypting sensitive data off-chain. By recovering the user’s uncompressed public key on-chain, you can encrypt payloads so that **only** the holder of the matching private key can decrypt them. Ideal for secure storage of private notes, confidential credentials, or setting up peer-to-peer encrypted messaging, this pattern lets you control exactly which address is authorized to read the encrypted data.
+#### This project enables any EVM-compatible dApp to designate an on-chain address whose ECDSA public key is used for encrypting sensitive data off-chain. By recovering the user’s uncompressed public key on-chain, you can encrypt payloads so that **only** the holder of the matching private key can decrypt them. Ideal for secure storage of private notes, confidential credentials, or setting up peer-to-peer encrypted messaging, this pattern lets you control exactly which address is authorized to read the encrypted data.
 ---
 
 ## Repository Structure
