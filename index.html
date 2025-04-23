@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>On-Chain PubKey Recovery</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    button { margin: .5rem 1rem .5rem 0; }
+    pre { background: #f4f4f4; padding: 1rem; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>On-Chain ECDSA PubKey Recovery</h1>
+  <button id="connect">Connect Wallet</button>
+  <button id="recover" disabled>Recover PubKey On-Chain</button>
+  <pre id="output">🔒 Not connected</pre>
+
+  <!-- ethers.js UMD -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.5/ethers.umd.min.js"></script>
+  <script>
+    const { ethers } = window;
+    const connectBtn = document.getElementById('connect');
+    const recoverBtn = document.getElementById('recover');
+    const out = document.getElementById('output');
+
+    // 1) Update this with your deployed contract address
+    const CONTRACT_ADDRESS = '0x60de4cf9d53dD251375D10a5D48cB985Ec980463';
+
+    // 2) Minimal ABI for the recoverPubKey method
+    const ABI = [
+      "function recoverPubKey(bytes32 message, uint8 v, bytes32 r, bytes32 s) external view returns (bytes)"
+    ];
+
+    let provider, signer, account, contract;
+
+    function log(txt) {
+      out.textContent = txt;
+    }
+
+    connectBtn.onclick = async () => {
+      if (!window.ethereum) {
+        return log('❌ No EVM wallet found');
+      }
+      provider = new ethers.BrowserProvider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      signer = await provider.getSigner();
+      account = await signer.getAddress();
+      log(`✅ Connected: ${account}`);
+      // instantiate contract with signer
+      contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+      recoverBtn.disabled = false;
+    };
+
+    recoverBtn.onclick = async () => {
+      try {
+        log('⏳ Signing message…');
+        // you can change this to any string
+        const messageString = 'Sign this message to register your encryption key';
+
+        // 1) compute the raw 32-byte hash of the message (no prefix)
+        const messageHash = ethers.keccak256(ethers.toUtf8Bytes(messageString));
+
+        // 2) Sign with personal_sign (ethers adds the prefix internally)
+        const signature = await signer.signMessage(messageString);
+
+        // 3) Split into r, s, v
+        const sig = ethers.Signature.from(signature);
+        const { r, s, v } = sig;
+
+        log('⏳ Calling on-chain recovery…');
+        // 4) Call our contract’s recoverPubKey
+        const pubkeyBytes = await contract.recoverPubKey(
+          messageHash,
+          v,
+          r,
+          s
+        );
+        // pubkeyBytes is a hex string "0x{64 bytes}", slice off "0x"
+        const hexKey = pubkeyBytes.slice(2);
+        // display as hex
+        log(`🔑 Uncompressed pubkey (hex X||Y):\n${hexKey}`);
+      } catch (err) {
+        console.error(err);
+        log(`❌ Error: ${err.message || err}`);
+      }
+    };
+  </script>
+</body>
+</html>
