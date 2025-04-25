@@ -145,4 +145,3 @@ Open-source ECIES libraries:
 ## Copyright
 
 Copyright and related rights waived via CC0.
-```
