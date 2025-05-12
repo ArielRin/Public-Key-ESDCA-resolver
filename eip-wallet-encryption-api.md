@@ -8,7 +8,7 @@ description: A standard JSON-RPC interface for Ethereum wallets to expose public
 
 **EIP**: <to be assigned>  
 **Title**: Wallet-Based Asymmetric Encryption API Standard  
-**Author**: Cheyne Hayworth ([@cheynespc](https://github.com/CheyneWeb3))  
+**Author**: Cheyne Hayworth ([@CheyneWeb3](https://github.com/CheyneWeb3))  
 **Discussions-To**: [https://ethereum-magicians.org/t/eip-wallet-encryption-api-standard-for-eth-getencryptionpublickey-and-eth-decrypt/0000](https://ethereum-magicians.org/t/eip-wallet-encryption-api-standard-for-eth-getencryptionpublickey-and-eth-decrypt/0000)  
 **Status**: Draft  
 **Type**: Interface  
